@@ -6,6 +6,8 @@ local corridorScene = false
 local corridorStep = 1
 local screenWidth = 0
 local image
+local zombieKopf -- Für das Zombie-Gesicht
+local bloodDrops = {} -- Tabelle für die aktiven Blutstropfen
 
 -- Variablen für die Mausposition (wichtig für die Hover-Effekte!)
 local mouseX = 0
@@ -64,6 +66,11 @@ function love.load()
         image = love.graphics.newImage("CreepyLab.png")
     end
 
+    -- Zombie-Bild laden
+    if love.filesystem.getInfo("zombieKopf.png") then
+        zombieImage = love.graphics.newImage("zombieKopf.png")
+    end
+
     if love.filesystem.getInfo("cour.ttf") then
         labFont = love.graphics.newFont("cour.ttf", 26)
     else
@@ -82,12 +89,9 @@ end
 function love.update(dt)
     local screenWidth = love.graphics.getWidth()
 
-    -- -----------------------------------------------------------------
-    -- ÄNDERUNG 1: Dynamische Button-Größenberechnung in das Update verschoben
-    -- -----------------------------------------------------------------
-    -- Wir holen uns die gerade aktive Schriftart für die Größenberechnung
+    -- Dynamische Button-Größenberechnung
     local aktuellerFont = labFont
-    if state == "title" then
+    if state == "title" or state == "jumpscare" or state == "gameover" then
         aktuellerFont = titleFont
     elseif state == "corridor" and corridorStep >= 3 then
         aktuellerFont = corridorFont
@@ -111,7 +115,6 @@ function love.update(dt)
     local gesamtBreiteOptionen = option1.width + option2.width + abstand
     option1.x = (screenWidth - gesamtBreiteOptionen) / 2
     option2.x = option1.x + option1.width + abstand
-    -- -----------------------------------------------------------------
 
     -- Mausposition für Hover-Effekte
     mouseX, mouseY = love.mouse.getPosition()
@@ -148,6 +151,41 @@ function love.update(dt)
         if corridorTimer > 8 and corridorStep == 3 then corridorStep = 4 end
         if corridorTimer > 11 and corridorStep == 4 then corridorStep = 5 end
     end
+
+    -- Timer und Logik für den Jumpscare
+    if state == "jumpscare" then
+        timer = timer + dt
+
+        -- BLUT-ANIMATION: Bestehende Tropfen nach unten fallen lassen
+        for i = #bloodDrops, 1, -1 do
+            local drop = bloodDrops[i]
+            drop.y = drop.y + drop.speed * dt
+            drop.alpha = drop.alpha - 0.5 * dt -- Werden langsam transparenter
+
+            -- Löschen, wenn unsichtbar oder aus dem Bildschirm gefallen
+            if drop.alpha <= 0 or drop.y > love.graphics.getHeight() then
+                table.remove(bloodDrops, i)
+            end
+        end
+
+        -- Neue Blutstropfen im Mundbereich generieren
+        if math.random() < 0.4 then -- Erhöhte Chance für intensiveres Tropfen
+            local startX = love.graphics.getWidth() / 2 + math.random(-30, 30) -- Mundbreite
+            local startY = love.graphics.getHeight() / 2 + 70 -- Mundhöhe im skalierten Zustand
+
+            table.insert(bloodDrops, {
+                x = startX,
+                y = startY,
+                radius = math.random(3, 6),
+                speed = math.random(150, 300),
+                alpha = 1.0
+            })
+        end
+
+        if timer >= 1.5 then -- Nach 1.5 Sekunden wechselt es zu Game Over
+            state = "gameover"
+        end
+    end
 end
 
 function love.draw()
@@ -156,7 +194,7 @@ function love.draw()
     local screenHeight = love.graphics.getHeight()
 
     -- Schriftart-Zuweisung für alle Spielzustände
-    if state == "title" then
+    if state == "title" or state == "jumpscare" or state == "gameover" then
         love.graphics.setFont(titleFont)
     elseif state == "scene" then
         love.graphics.setFont(labFont)
@@ -280,6 +318,54 @@ function love.draw()
                 love.graphics.line(math.random(0, screenWidth), math.random(0, 600), math.random(0, screenWidth), math.random(0, 600))
             end
         end
+
+        -- Jumpscare-Bildschirm (Laborhintergrund bleibt + Riesen-Zombie + Tropfendes Blut)
+    elseif state == "jumpscare" then
+        if image then
+            local imageX = (screenWidth - image:getWidth()) / 2
+            love.graphics.draw(image, imageX, 80)
+        end
+
+        -- Roter Flackereffekt über dem Bildschirm
+        if math.floor(timer * 22) % 2 == 0 then
+            love.graphics.setColor(0.5, 0, 0, 0.4) -- Transparentes Rot
+            love.graphics.rectangle("fill", 0, 0, screenWidth, screenHeight)
+        end
+
+        -- Zombie GANZ GROSS zentriert zeichnen
+        if zombieImage then
+            local scale = 1.6 -- Skalierungsfaktor für enorme Größe
+            local zW = zombieImage:getWidth() * scale
+            local zH = zombieImage:getHeight() * scale
+            local zX = (screenWidth - zW) / 2
+            local zY = (screenHeight - zH) / 2
+
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.draw(zombieImage, zX, zY, 0, scale, scale)
+        end
+
+        -- AKTIVE BLUTSTROPFEN ZEICHNEN (werden über den Zombie gelegt)
+        for _, drop in ipairs(bloodDrops) do
+            love.graphics.setColor(0.7, 0, 0, drop.alpha) -- Dunkelrotes Blut
+            love.graphics.circle("fill", drop.x, drop.y, drop.radius)
+        end
+
+        -- Text über dem Schrecken anzeigen
+        love.graphics.setFont(titleFont)
+        love.graphics.setColor(1, 1, 1)
+        local textY = (screenHeight - titleFont:getHeight()) / 2
+        love.graphics.printf("EIN ZOMBIE!!!", 0, textY, screenWidth, "center")
+
+        -- Game Over Bildschirm
+    elseif state == "gameover" then
+        love.graphics.clear(0, 0, 0)
+        love.graphics.setColor(1, 0, 0)
+        love.graphics.printf("GAME OVER", 0, 180, screenWidth, "center")
+
+        love.graphics.setFont(labFont)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.printf("Du hättest dich nicht umsehen sollen...", 0, 320, screenWidth, "center")
+        love.graphics.printf("Drücke 'R' zum Neustarten", 0, 420, screenWidth, "center")
     end
 end
 
@@ -290,9 +376,13 @@ function love.mousepressed(x, y, button)
                     y > option1.y and y < option1.y + option1.height then
                 state = "corridor"
             end
+
+            -- Wenn Option 2 gedrückt wird -> Sofortiger Jumpscare!
             if x > option2.x and x < option2.x + option2.width and
                     y > option2.y and y < option2.y + option2.height then
-                print("Spieler bleibt im Labor")
+                state = "jumpscare"
+                timer = 0 -- Reset, damit der Jumpscare-Timer korrekt zählt
+                bloodDrops = {} -- Blut-Tabelle für den frischen Jumpscare leeren
             end
         else
             if x > weiterButton.x and x < weiterButton.x + weiterButton.width and
@@ -305,5 +395,20 @@ function love.mousepressed(x, y, button)
                 end
             end
         end
+    end
+end
+
+-- Tastendruck abfangen, um das Spiel nach dem Game Over neuszustarten
+function love.keypressed(key)
+    if state == "gameover" and key == "r" then
+        -- Alle Variablen wieder auf den Anfangszustand zurücksetzen
+        state = "title"
+        timer = 0
+        corridorTimer = 0
+        corridorStep = 1
+        aktuellerText = 1
+        typewriterProgress = 0
+        showOptions = false
+        bloodDrops = {}
     end
 end
