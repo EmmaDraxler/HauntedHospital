@@ -6,8 +6,8 @@ local corridorScene = false
 local corridorStep = 1
 local screenWidth = 0
 local image
+local corridorImage -- NEU: Variable für das Flur-Hintergrundbild
 local zombieImage -- Einheitlicher Name für das Zombie-Bild
-local bloodDrops = {}
 
 -- Variablen für die Mausposition
 local mouseX = 0
@@ -43,6 +43,11 @@ local option2 = { x = 0, y = 550, width = 220, height = 60, text = "Im Labor ums
 function love.load()
     if love.filesystem.getInfo("CreepyLab.png") then
         image = love.graphics.newImage("CreepyLab.png")
+    end
+
+    -- NEU: Lädt das generierte Flur-Bild aus dem Spielordner
+    if love.filesystem.getInfo("Korridor.png") then
+        corridorImage = love.graphics.newImage("Korridor.png")
     end
 
     if love.filesystem.getInfo("zombieKopf.png") then
@@ -100,7 +105,7 @@ function love.update(dt)
         timer = timer + dt
         if timer >= 2 then
             state = "scene"
-            typewriterProgress = 0 -- FEHLERBEHEBUNG: Startet den Effekt exakt beim Szenenwechsel
+            typewriterProgress = 0
         end
     end
 
@@ -128,36 +133,12 @@ function love.update(dt)
         if corridorTimer > 5 and corridorStep == 2 then corridorStep = 3 end
         if corridorTimer > 8 and corridorStep == 3 then corridorStep = 4 end
         if corridorTimer > 11 and corridorStep == 4 then
-            state = "gameover" -- Beendet die Florszene nach Ablauf der Zeit
+            state = "corridor_end"
         end
     end
 
     if state == "jumpscare" then
         timer = timer + dt
-
-        for i = #bloodDrops, 1, -1 do
-            local drop = bloodDrops[i]
-            drop.y = drop.y + drop.speed * dt
-            drop.alpha = drop.alpha - 0.5 * dt
-
-            if drop.alpha <= 0 or drop.y > love.graphics.getHeight() then
-                table.remove(bloodDrops, i)
-            end
-        end
-
-        if math.random() < 0.4 then
-            local startX = love.graphics.getWidth() / 2 + math.random(-30, 30)
-            local startY = love.graphics.getHeight() / 2 + 70
-
-            table.insert(bloodDrops, {
-                x = startX,
-                y = startY,
-                radius = math.random(3, 6),
-                speed = math.random(150, 300),
-                alpha = 1.0
-            })
-        end
-
         if timer >= 1.5 then
             state = "gameover"
         end
@@ -169,10 +150,9 @@ function love.draw()
     local screenWidth = love.graphics.getWidth()
     local screenHeight = love.graphics.getHeight()
 
-    -- Saubere Schriftzuweisung je nach Zustand
     if state == "title" or state == "jumpscare" or state == "gameover" then
         love.graphics.setFont(titleFont)
-    elseif state == "scene" then
+    elseif state == "scene" or state == "corridor_end" then
         love.graphics.setFont(labFont)
     elseif state == "corridor" then
         if corridorStep >= 3 then
@@ -247,28 +227,20 @@ function love.draw()
         love.graphics.setLineWidth(1)
 
     elseif state == "corridor" then
-        love.graphics.clear(0.05, 0.05, 0.05)
+        love.graphics.clear(0, 0, 0)
 
-        local flurBreite = 500
-        local flurX = (screenWidth - flurBreite) / 2
-        love.graphics.setColor(0.2, 0.2, 0.2)
-        love.graphics.rectangle("fill", flurX, 0, flurBreite, 600)
-
-        love.graphics.setFont(corridorFont)
-        love.graphics.setColor(1, 0, 0)
-        love.graphics.print("HELP", flurX + 70, 150)
-        love.graphics.print("RUN", flurX + 350, 250)
-        love.graphics.circle("fill", flurX + 100, 350, 20)
-        love.graphics.circle("fill", flurX + 400, 400, 20)
-
-        if corridorStep >= 3 then
-            love.graphics.setFont(corridorFont)
-        else
-            love.graphics.setFont(labFont)
+        -- KORREKTUR: Zeichnet das neue Hintergrundbild zentriert auf dem Bildschirm
+        if corridorImage then
+            love.graphics.setColor(1, 1, 1)
+            local corrX = (screenWidth - corridorImage:getWidth()) / 2
+            -- Falls das Bild genau 600px hoch ist, startet es bei Y = 0
+            local corrY = (screenHeight - corridorImage:getHeight()) / 2
+            love.graphics.draw(corridorImage, corrX, corrY)
         end
 
-        --  Die Zombies bleiben ab Schritt 3 UND Schritt 4 sichtbar!
-        -- ZOMBIES ZEICHNEN (Weiter nach unten verschoben)
+        -- Für die relative Platzierung der Zombies nutzen wir die Mitte des Bildschirms
+        local flurX = screenWidth / 2 - 250
+
         if corridorStep >= 3 then
             if zombieImage then
                 love.graphics.setColor(1, 1, 1)
@@ -276,39 +248,30 @@ function love.draw()
                 local imgWidth = zombieImage:getWidth()
                 local imgHeight = zombieImage:getHeight()
 
-                -- Die Mitte der drei Flur-Spuren berechnen
                 local spurLinks = flurX + (500 / 6)
                 local spurMitte = flurX + (500 / 2)
                 local spurRechts = flurX + (500 * 5 / 6)
 
-                -- KORREKTUR: Höherer Wert schiebt die Zombies weiter nach unten
                 local bodenY = 530
 
-                -- Zombie 1 (Links, im Hintergrund)
+                -- Zombie 1 (Links)
                 local scale1 = 0.3
                 local x1 = spurLinks - (imgWidth * scale1 / 2)
                 local y1 = (bodenY - 30) - (imgHeight * scale1)
                 love.graphics.draw(zombieImage, x1, y1, 0, scale1, scale1)
 
-                -- Zombie 3 (Rechts, weiter hinten)
+                -- Zombie 3 (Rechts)
                 local scale3 = 0.25
                 local x3 = spurRechts - (imgWidth * scale3 / 2)
                 local y3 = (bodenY - 50) - (imgHeight * scale3)
                 love.graphics.draw(zombieImage, x3, y3, 0, scale3, scale3)
 
-                -- Zombie 2 (Mitte, ganz vorne)
+                -- Zombie 2 (Mitte)
                 local scale2 = 0.5
                 local x2 = spurMitte - (imgWidth * scale2 / 2)
                 local y2 = bodenY - (imgHeight * scale2)
                 love.graphics.draw(zombieImage, x2, y2, 0, scale2, scale2)
-            else
-                -- Fallback-Rechtecke
-                love.graphics.setColor(0, 1, 0)
-                love.graphics.rectangle("fill", flurX + 30, 300, 80, 200)
-                love.graphics.rectangle("fill", flurX + 150, 280, 80, 220)
-                love.graphics.rectangle("fill", flurX + 270, 310, 80, 190)
             end
-        end
         end
 
         -- Texte für die jeweiligen Schritte im Flur
@@ -338,9 +301,10 @@ function love.draw()
         end
 
         if zombieImage then
-            local scale = 1.6
+            local scale = 0.8
             local zW = zombieImage:getWidth() * scale
             local zH = zombieImage:getHeight() * scale
+
             local zX = (screenWidth - zW) / 2
             local zY = (screenHeight - zH) / 2
 
@@ -348,13 +312,8 @@ function love.draw()
             love.graphics.draw(zombieImage, zX, zY, 0, scale, scale)
         end
 
-        for _, drop in ipairs(bloodDrops) do
-            love.graphics.setColor(0.7, 0, 0, drop.alpha)
-            love.graphics.circle("fill", drop.x, drop.y, drop.radius)
-        end
-
         love.graphics.setFont(titleFont)
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(1, 0, 0)
         local textY = (screenHeight - titleFont:getHeight()) / 2
         love.graphics.printf("EIN ZOMBIE!!!", 0, textY, screenWidth, "center")
 
@@ -367,8 +326,31 @@ function love.draw()
         love.graphics.setColor(1, 1, 1)
         love.graphics.printf("Der Horror hat dich eingeholt...", 0, 320, screenWidth, "center")
         love.graphics.printf("Drücke 'R' zum Neustarten", 0, 420, screenWidth, "center")
-    end
 
+    elseif state == "corridor_end" then
+        love.graphics.clear(0, 0, 0)
+        love.graphics.setColor(0.2, 0.8, 0.2)
+        love.graphics.printf("SZENENWECHSEL", 0, 180, screenWidth, "center")
+
+        love.graphics.setFont(labFont)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.printf("Du konntest den Zombies entkommen und erreichst die Treppe...", 0, 320, screenWidth, "center")
+
+        local aktuellerFont = love.graphics.getFont()
+        if mouseX > weiterButton.x and mouseX < weiterButton.x + weiterButton.width and
+                mouseY > weiterButton.y and mouseY < weiterButton.y + weiterButton.height then
+            love.graphics.setColor(0.3, 0.3, 0.3, 0.3)
+            love.graphics.rectangle("fill", weiterButton.x, weiterButton.y, weiterButton.width, weiterButton.height)
+            love.graphics.setColor(0.8, 0.8, 0.8)
+        else
+            love.graphics.setColor(0.3, 0.3, 0.3)
+        end
+        love.graphics.rectangle("line", weiterButton.x, weiterButton.y, weiterButton.width, weiterButton.height)
+        love.graphics.setColor(1, 1, 1)
+        local textYW = weiterButton.y + (weiterButton.height - aktuellerFont:getHeight()) / 2
+        love.graphics.printf("Weiter", weiterButton.x, textYW, weiterButton.width, "center")
+    end
+end
 
 function love.mousepressed(x, y, button)
     if state == "scene" and button == 1 then
@@ -384,7 +366,6 @@ function love.mousepressed(x, y, button)
                     y > option2.y and y < option2.y + option2.height then
                 state = "jumpscare"
                 timer = 0
-                bloodDrops = {}
             end
         else
             if x > weiterButton.x and x < weiterButton.x + weiterButton.width and
@@ -397,18 +378,32 @@ function love.mousepressed(x, y, button)
                 end
             end
         end
+    elseif state == "corridor_end" and button == 1 then
+        if x > weiterButton.x and x < weiterButton.x + weiterButton.width and
+                y > weiterButton.y and y < weiterButton.y + weiterButton.height then
+            state = "title"
+            timer = 0
+            corridorTimer = 0
+            corridorStep = 1
+            aktuellerText = 1
+            typewriterProgress = 0
+            showOptions = false
+        end
     end
 end
 
 function love.keypressed(key)
+    if key == "escape" then
+        love.event.quit()
+    end
+
     if state == "gameover" and key == "r" then
         state = "title"
         timer = 0
-        corridorTimer = 0   -- Setzt die Flur-Variablen beim Reset zurück
+        corridorTimer = 0
         corridorStep = 1
         aktuellerText = 1
         typewriterProgress = 0
         showOptions = false
-        bloodDrops = {}
     end
 end
