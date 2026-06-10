@@ -279,13 +279,13 @@ function love.draw()
             love.graphics.setColor(1, 1, 1)
             love.graphics.printf("Du betrittst den Flur...", 0, 500, screenWidth, "center")
         elseif corridorStep == 2 then
-            love.graphics.setColor(1, 1, 1)
+            love.graphics.setColor(0, 1, 0)
             love.graphics.printf("Du schaust nach links...", 0, 500, screenWidth, "center")
         elseif corridorStep == 3 then
             love.graphics.setColor(1, 0, 0)
             love.graphics.printf("ZOMBIES!! LAUF!", 0, 500, screenWidth, "center")
         elseif corridorStep == 4 then
-            love.graphics.setColor(1, 1, 1)
+            love.graphics.setColor(0, 1, 0)
             love.graphics.printf("Du schaust nach rechts und suchst einen Ausweg...", 0, 500, screenWidth, "center")
         end
 
@@ -296,7 +296,7 @@ function love.draw()
         end
 
         if math.floor(timer * 22) % 2 == 0 then
-            love.graphics.setColor(0.5, 0, 0, 0.4)
+            love.graphics.setColor(1, 0, 0, 0.4)
             love.graphics.rectangle("fill", 0, 0, screenWidth, screenHeight)
         end
 
