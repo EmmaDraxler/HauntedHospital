@@ -44,43 +44,59 @@ local option1 = { x = 0, y = 550, width = 220, height = 60, text = "Zur Tür geh
 local option2 = { x = 0, y = 550, width = 220, height = 60, text = "Im Labor umsehen" }
 
 -- =================================================================
--- 2. JUMP 'N' RUN VARIABLEN (ERWEITERT & LÄNGER)
+-- 2. JUMP 'N' RUN VARIABLEN (ZOMBIE-GESCHWINDIGKEIT ANGEPASST)
 -- =================================================================
 local jnrPlayer = { x = 50, y = 400, vx = 0, vy = 0, size = 30, onGround = false }
 local jnrGravity = 1500      -- Schwerkraft nach unten
 local jnrJumpForce = -650    -- Sprungkraft
-local jnrSpeed = 300         -- Laufgeschwindigkeit
+local jnrSpeed = 300         -- Laufgeschwindigkeit nach rechts
 
--- KAMERA-VARIABLE: Speichert, wie weit die Welt nach links verschoben werden muss
+-- NEU: Der Verfolger (Geschwindigkeit für mehr Fairness verringert)
+local zombieWallX = -200     -- Startet links außerhalb des Bildschirms
+local zombieWallSpeed = 110  -- Von 160 auf 110 reduziert: Mehr Zeit für Koordination!
+
+-- KAMERA-VARIABLE
 local cameraX = 0
 
--- LEVEL-BEREICH: Das Level ist jetzt viel länger (z.B. 2000 Pixel breit statt nur 800)
-local levelWidth = 2000
+-- LEVEL-BREITE: 3500 Pixel
+local levelWidth = 3500
 
--- FESTE PLATTFORMEN: Jetzt über die gesamte Länge verteilt
+-- FESTE PLATTFORMEN
 local jnrPlatforms = {
     { x = 0, y = 450, width = 250, height = 150 },
     { x = 350, y = 380, width = 200, height = 220 },
     { x = 650, y = 480, width = 200, height = 150 },
     { x = 1200, y = 400, width = 150, height = 200 },
     { x = 1450, y = 320, width = 200, height = 280 },
-    { x = 1750, y = 420, width = 250, height = 180 }
+    { x = 2000, y = 440, width = 250, height = 160 },
+    { x = 2350, y = 360, width = 180, height = 240 },
+    { x = 2650, y = 460, width = 220, height = 140 },
+    { x = 2950, y = 380, width = 150, height = 220 },
+    { x = 3200, y = 420, width = 300, height = 180 }
 }
 
--- NEU: BEWEGLICHE PLATTFORM (Fährt automatisch hin und her)
-local movingPlatform = {
-    x = 900, y = 420, width = 150, height = 30,
-    startX = 900, endX = 1150, speed = 100, direction = 1
+-- BEWEGLICHE PLATTFORMEN
+local movingPlatforms = {
+    {
+        x = 900, y = 420, width = 150, height = 30,
+        startX = 900, endX = 1150, speed = 100, direction = 1
+    },
+    {
+        x = 1700, y = 350, width = 150, height = 30,
+        startX = 1700, endX = 1950, speed = 130, direction = 1
+    }
 }
 
--- NEU: HINDERNISSE (Rote Stacheln / Gefahrenzonen)
+-- HINDERNISSE (Stacheln)
 local jnrHazards = {
-    { x = 400, y = 360, width = 40, height = 20 },  -- Auf der zweiten Plattform
-    { x = 1500, y = 300, width = 50, height = 20 }  -- Auf der fünften Plattform
+    { x = 400, y = 360, width = 40, height = 20 },
+    { x = 1500, y = 300, width = 50, height = 20 },
+    { x = 2050, y = 420, width = 40, height = 20 },
+    { x = 2700, y = 440, width = 60, height = 20 }
 }
 
--- DAS ZIEL: Befindet sich jetzt ganz weit hinten im Level (bei X = 1900)
-local jnrGoal = { x = 1900, y = 370, width = 40, height = 50 }
+-- DAS ZIEL
+local jnrGoal = { x = 3250, y = 340, width = 50, height = 80 }
 
 -- =================================================================
 -- 3. LOVE2D HAUPTFUNKTION: LOAD
@@ -112,7 +128,6 @@ function love.update(dt)
     local screenWidth = love.graphics.getWidth()
     local screenHeight = love.graphics.getHeight()
 
-    -- Dynamische Button-Größenberechnung
     local aktuellerFont = labFont
     if state == "title" or state == "jumpscare" or state == "gameover" or state == "win" then aktuellerFont = titleFont
     elseif state == "corridor" and corridorStep >= 3 then aktuellerFont = corridorFont end
@@ -156,39 +171,43 @@ function love.update(dt)
         if corridorTimer > 8 and corridorStep == 3 then corridorStep = 4 end
         if corridorTimer > 11 and corridorStep == 4 then
             state = "jumpnrun"
-            -- Spieler an den Anfang zurücksetzen
             jnrPlayer.x = 50 jnrPlayer.y = 400 jnrPlayer.vx = 0 jnrPlayer.vy = 0
+            zombieWallX = -200
         end
     end
 
-    -- -----------------------------------------------------------------
     -- JUMP 'N' RUN UPDATE LOGIK
-    -- -----------------------------------------------------------------
     if state == "jumpnrun" then
-        -- 1. Links/Rechts Steuerung
-        jnrPlayer.vx = 0
-        if love.keyboard.isDown("left") then jnrPlayer.vx = -jnrSpeed end
-        if love.keyboard.isDown("right") then jnrPlayer.vx = jnrSpeed end
+        -- Bewegung des Verfolgers nach rechts
+        zombieWallX = zombieWallX + zombieWallSpeed * dt
 
-        -- 2. Schwerkraft und Bewegung anwenden
+        -- Kollision mit der Zombie-Wand hinter dir -> Game Over!
+        if jnrPlayer.x < zombieWallX then
+            state = "gameover"
+        end
+
+        jnrPlayer.vx = 0
+        if love.keyboard.isDown("right") then
+            jnrPlayer.vx = jnrSpeed
+        end
+
         jnrPlayer.vy = jnrPlayer.vy + jnrGravity * dt
         jnrPlayer.x = jnrPlayer.x + jnrPlayer.vx * dt
         jnrPlayer.y = jnrPlayer.y + jnrPlayer.vy * dt
 
-        -- 3. Grenzen der Spielwelt einhalten (Man kann nicht links aus dem Bildschirm laufen)
-        if jnrPlayer.x < 0 then jnrPlayer.x = 0 end
-
-        -- 4. BEWEGLICHE PLATTFORM UPDATE: Fährt hin und her
-        movingPlatform.x = movingPlatform.x + movingPlatform.speed * movingPlatform.direction * dt
-        if movingPlatform.x > movingPlatform.endX then
-            movingPlatform.x = movingPlatform.endX
-            movingPlatform.direction = -1
-        elseif movingPlatform.x < movingPlatform.startX then
-            movingPlatform.x = movingPlatform.startX
-            movingPlatform.direction = 1
+        -- Alle beweglichen Plattformen updaten
+        for _, mp in ipairs(movingPlatforms) do
+            mp.x = mp.x + mp.speed * mp.direction * dt
+            if mp.x > mp.endX then
+                mp.x = mp.endX
+                mp.direction = -1
+            elseif mp.x < mp.startX then
+                mp.x = mp.startX
+                mp.direction = 1
+            end
         end
 
-        -- 5. KOLLISION MIT FESTEN PLATTFORMEN
+        -- Kollision feste Plattformen
         jnrPlayer.onGround = false
         for _, plat in ipairs(jnrPlatforms) do
             if checkCollision(jnrPlayer.x, jnrPlayer.y, jnrPlayer.size, jnrPlayer.size, plat.x, plat.y, plat.width, plat.height) then
@@ -200,38 +219,38 @@ function love.update(dt)
             end
         end
 
-        -- 6. KOLLISION MIT DER BEWEGLICHEN PLATTFORM
-        if checkCollision(jnrPlayer.x, jnrPlayer.y, jnrPlayer.size, jnrPlayer.size, movingPlatform.x, movingPlatform.y, movingPlatform.width, movingPlatform.height) then
-            if jnrPlayer.vy > 0 and jnrPlayer.y + jnrPlayer.size - jnrPlayer.vy * dt <= movingPlatform.y then
-                jnrPlayer.y = movingPlatform.y - jnrPlayer.size
-                jnrPlayer.vy = 0
-                jnrPlayer.onGround = true
-                -- Spieler mit der Plattform mitbewegen!
-                jnrPlayer.x = jnrPlayer.x + movingPlatform.speed * movingPlatform.direction * dt
+        -- Kollision bewegliche Plattformen
+        for _, mp in ipairs(movingPlatforms) do
+            if checkCollision(jnrPlayer.x, jnrPlayer.y, jnrPlayer.size, jnrPlayer.size, mp.x, mp.y, mp.width, mp.height) then
+                if jnrPlayer.vy > 0 and jnrPlayer.y + jnrPlayer.size - jnrPlayer.vy * dt <= mp.y then
+                    jnrPlayer.y = mp.y - jnrPlayer.size
+                    jnrPlayer.vy = 0
+                    jnrPlayer.onGround = true
+                    jnrPlayer.x = jnrPlayer.x + mp.speed * mp.direction * dt
+                end
             end
         end
 
-        -- 7. KOLLISION MIT HINDERNISSEN (Stacheln -> Setzt Spieler zurück)
+        -- Kollision mit Stacheln
         for _, haz in ipairs(jnrHazards) do
             if checkCollision(jnrPlayer.x, jnrPlayer.y, jnrPlayer.size, jnrPlayer.size, haz.x, haz.y, haz.width, haz.height) then
-                jnrPlayer.x = 50 jnrPlayer.y = 400 jnrPlayer.vx = 0 jnrPlayer.vy = 0 -- Reset
+                jnrPlayer.x = math.max(jnrPlayer.x - 100, zombieWallX + 20) -- Wirft Spieler etwas zurück
+                jnrPlayer.vy = -200
             end
         end
 
-        -- 8. ZIEL ERREICHT? (Lagerraum-Tür)
+        -- ZIEL ERREICHT?
         if checkCollision(jnrPlayer.x, jnrPlayer.y, jnrPlayer.size, jnrPlayer.size, jnrGoal.x, jnrGoal.y, jnrGoal.width, jnrGoal.height) then
             state = "lagerraum"
         end
 
-        -- 9. ABGRUND: Wenn man runterfällt -> Reset
+        -- Abgrund-Kollision bedeutet jetzt direkt GAMEOVER
         if jnrPlayer.y > screenHeight then
-            jnrPlayer.x = 50 jnrPlayer.y = 400 jnrPlayer.vx = 0 jnrPlayer.vy = 0
+            state = "gameover"
         end
 
-        -- 10. MITTIGKEIT / KAMERAFÜHRUNG: Berechnen, wo die Kamera stehen muss
-        -- Spieler wird in der Mitte des Bildschirms gehalten
+        -- Kameraführung
         cameraX = jnrPlayer.x - screenWidth / 2 + jnrPlayer.size / 2
-        -- Kamera stoppen, wenn sie das linke oder rechte Ende der Welt erreicht
         if cameraX < 0 then cameraX = 0 end
         if cameraX > levelWidth - screenWidth then cameraX = levelWidth - screenWidth end
     end
@@ -250,12 +269,10 @@ function love.draw()
     local screenWidth = love.graphics.getWidth()
     local screenHeight = love.graphics.getHeight()
 
-    -- Schriftarten setzen
     if state == "title" or state == "jumpscare" or state == "gameover" or state == "win" then love.graphics.setFont(titleFont)
     elseif state == "scene" or state == "jumpnrun" or state == "lagerraum" then love.graphics.setFont(labFont)
     elseif state == "corridor" then if corridorStep >= 3 then love.graphics.setFont(corridorFont) else love.graphics.setFont(labFont) end end
 
-    -- [DRAW: TITLE & SCENE & CORRIDOR] - Bleiben unverändert, da ohne Kamera
     if state == "title" then
         love.graphics.setColor(1, 0, 0)
         love.graphics.printf("THE HAUNTED HOSPITAL", 0, (screenHeight - titleFont:getHeight()) / 2, screenWidth, "center")
@@ -303,16 +320,23 @@ function love.draw()
         elseif corridorStep == 4 then love.graphics.printf("Du rennst um dein Leben!!", 0, 500, screenWidth, "center") end
 
         -- -----------------------------------------------------------------
-        -- ZEICHNEN: JUMP 'N' RUN (HIER WIRKT DIE KAMERA)
+        -- ZEICHNEN: JUMP 'N' RUN
         -- -----------------------------------------------------------------
     elseif state == "jumpnrun" then
-        -- UI Texte bleiben statisch am Bildschirm kleben
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.printf("FLUCHT! Weiche den Abgründen und Stacheln aus!", 0, 30, screenWidth, "center")
+        love.graphics.setColor(1, 0.2, 0.2)
+        love.graphics.printf("DIE HORDE JAGT DICH! Nicht in den Abgrund fallen!", 0, 30, screenWidth, "center")
 
-        -- KAMERA STARTEN: Ab hier wird alles um 'cameraX' nach links verschoben gezeichnet!
+        -- KAMERA STARTEN
         love.graphics.push()
         love.graphics.translate(-cameraX, 0)
+
+        -- Visuelle Darstellung des Abgrunds (Zombies lauern unten)
+        love.graphics.setColor(0.4, 0, 0, 0.6)
+        love.graphics.rectangle("fill", cameraX, screenHeight - 60, screenWidth, 60)
+        love.graphics.setColor(1, 0, 0)
+        for i = 0, screenWidth, 80 do
+            love.graphics.print("ZOMBIES", cameraX + i, screenHeight - 45)
+        end
 
         -- 1. Feste Plattformen zeichnen
         for _, plat in ipairs(jnrPlatforms) do
@@ -320,25 +344,40 @@ function love.draw()
             love.graphics.rectangle("fill", plat.x, plat.y, plat.width, plat.height)
         end
 
-        -- 2. Moving Platform zeichnen
-        love.graphics.setColor(0.5, 0.5, 0.7)
-        love.graphics.rectangle("fill", movingPlatform.x, movingPlatform.y, movingPlatform.width, movingPlatform.height)
+        -- 2. Alle beweglichen Plattformen zeichnen
+        for _, mp in ipairs(movingPlatforms) do
+            love.graphics.setColor(0.5, 0.5, 0.7)
+            love.graphics.rectangle("fill", mp.x, mp.y, mp.width, mp.height)
+        end
 
-        -- 3. Hindernisse zeichnen (Rote Rechtecke als Stacheln)
+        -- 3. Hindernisse zeichnen
         for _, haz in ipairs(jnrHazards) do
             love.graphics.setColor(1, 0, 0)
             love.graphics.rectangle("fill", haz.x, haz.y, haz.width, haz.height)
         end
 
-        -- 4. Grüne Ziel-Tür zeichnen
+        -- 4. GRÜNE ZIEL-TÜR
         love.graphics.setColor(0, 1, 0)
         love.graphics.rectangle("fill", jnrGoal.x, jnrGoal.y, jnrGoal.width, jnrGoal.height)
+        love.graphics.setColor(0, 0, 0)
+        love.graphics.rectangle("fill", jnrGoal.x + jnrGoal.width - 12, jnrGoal.y + jnrGoal.height / 2, 6, 6)
         love.graphics.setColor(1, 1, 1)
-        love.graphics.print("LAGER", jnrGoal.x - 10, jnrGoal.y - 25)
+        love.graphics.print("LAGER", jnrGoal.x - 5, jnrGoal.y - 30)
 
         -- 5. Blauen Spieler zeichnen
         love.graphics.setColor(0.2, 0.5, 1)
         love.graphics.rectangle("fill", jnrPlayer.x, jnrPlayer.y, jnrPlayer.size, jnrPlayer.size)
+
+        -- Zeichnen der verfolgenden Zombie-Hintergrundwand
+        if zombieWallX > cameraX - 200 then
+            love.graphics.setColor(1, 0, 0, 0.4)
+            love.graphics.rectangle("fill", cameraX, 0, zombieWallX - cameraX, screenHeight)
+            love.graphics.setColor(1, 0, 0)
+            love.graphics.setLineWidth(5)
+            love.graphics.line(zombieWallX, 0, zombieWallX, screenHeight)
+            love.graphics.setLineWidth(1)
+            love.graphics.print("ZOMBIES!", zombieWallX - 110, 200)
+        end
 
         -- KAMERA BEENDEN
         love.graphics.pop()
@@ -394,8 +433,7 @@ end
 function love.keypressed(key)
     if key == "escape" then love.event.quit() end
 
-    -- Springen mit Leertaste, Pfeiltaste-Hoch oder W
-    if state == "jumpnrun" and (key == "space" or key == "up" or key == "w") and jnrPlayer.onGround then
+    if state == "jumpnrun" and key == "up" and jnrPlayer.onGround then
         jnrPlayer.vy = jnrJumpForce
     end
 
